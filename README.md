@@ -124,6 +124,20 @@ SYSTEM_PROMPT_FILE=./prompts/system.md
 go mod tidy
 ```
 
+### Lint the project
+
+Install `golangci-lint` if needed:
+
+```bash
+go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+```
+
+Then run:
+
+```bash
+golangci-lint run ./...
+```
+
 ### Run the app
 
 ```bash
