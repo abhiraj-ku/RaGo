@@ -1,4 +1,4 @@
-# RAG Course
+# RaGo - Rag in go
 
 A Go-based learning project for building a modern Retrieval-Augmented Generation (RAG) application, grounded in clean architecture, provider abstraction, and production-minded AI engineering patterns.
 
