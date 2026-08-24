@@ -101,9 +101,13 @@ func debugHistoryEnabled() bool {
 }
 
 func logHistory(w *os.File, history []llm.Message) {
-	fmt.Fprintf(w, "\n[debug] sending %d messages\n", len(history))
+	if _, err := fmt.Fprintf(w, "\n[debug] sending %d messages\n", len(history)); err != nil {
+		return
+	}
 	for i, msg := range history {
-		fmt.Fprintf(w, "[debug] history[%d] role=%s content=%q\n", i, msg.Role, msg.Content)
+		if _, err := fmt.Fprintf(w, "[debug] history[%d] role=%s content=%q\n", i, msg.Role, msg.Content); err != nil {
+			return
+		}
 	}
 }
 

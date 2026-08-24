@@ -46,7 +46,9 @@ func (c *Client) ChatStream(ctx context.Context, messages []Message, onDelta fun
 		Model:    c.cfg.Model,
 		Messages: toSDKMessages(messages),
 	})
-	defer stream.Close()
+	defer func() {
+		_ = stream.Close()
+	}()
 
 	var content strings.Builder
 	role := "assistant"
