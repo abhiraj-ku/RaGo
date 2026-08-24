@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"rag-course/llm"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -60,6 +61,10 @@ func RunREPL(ctx context.Context, client *llm.Client, opts Options) error {
 		// append the user input to original history
 		history = append(history, llm.Message{Role: "user", Content: input})
 
+		if debugHistoryEnabled() {
+			logHistory(os.Stderr, history)
+		}
+
 		// simulate thinking
 		spin := startSpinner("thinking")
 		var stopOnce sync.Once
@@ -78,6 +83,27 @@ func RunREPL(ctx context.Context, client *llm.Client, opts Options) error {
 			continue
 		}
 		history = append(history, reply)
+	}
+}
+
+func debugHistoryEnabled() bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv("DEBUG_HISTORY")))
+	if v == "" {
+		return false
+	}
+
+	enabled, err := strconv.ParseBool(v)
+	if err != nil {
+		return false
+	}
+
+	return enabled
+}
+
+func logHistory(w *os.File, history []llm.Message) {
+	fmt.Fprintf(w, "\n[debug] sending %d messages\n", len(history))
+	for i, msg := range history {
+		fmt.Fprintf(w, "[debug] history[%d] role=%s content=%q\n", i, msg.Role, msg.Content)
 	}
 }
 
