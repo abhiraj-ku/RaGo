@@ -2,11 +2,14 @@ package pgvector
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"rag-course/vector"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/pgvector/pgvector-go"
 	pgxvec "github.com/pgvector/pgvector-go/pgx"
 )
 
@@ -95,4 +98,94 @@ func firstline(s string) string {
 	}
 	return s
 
+}
+
+func (s *Store) Upsert(ctx context.Context, docs []vector.Document) error {
+	if len(docs) == 0 {
+		return nil
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	const stmt = ` insert into documents(id,content,metadata,embedding) 
+			 values($1,$2,$3,$4)
+			 on conflict(id) do update set
+			 content = EXCLUDED.content,
+			 metadata= EXCLUDED.metadata,
+			 embedding= EXCLUDED.embedding
+	
+	`
+
+	for _, d := range docs {
+		meta, err := marshallMeta(d.Metadata)
+		if err != nil {
+			return fmt.Errorf("metadata for %s: %w", err)
+		}
+		if _, err := tx.Exec(ctx, stmt, d.ID, d.Content, meta, pgvector.NewVector(d.Embedding)); err != nil {
+			return fmt.Errorf("upsert: %s: $w", d.ID, err)
+		}
+
+	}
+	return tx.Commit(ctx)
+}
+
+func marshallMeta(m map[string]string) ([]byte, error) {
+	if len(m) == 0 {
+		return []byte("{}"), nil
+	}
+
+	return json.Marshal(m)
+
+}
+
+func unmarshalMetadata(raw []byte, dst *map[string]string) error {
+
+	if len(raw) == 0 {
+		*dst = nil
+		return nil
+	}
+	return json.Unmarshal(raw, dst)
+
+}
+
+func (s *Store) Query(ctx context.Context, embeddings []float32, topk int) ([]vector.Result, error) {
+	if topk <= 0 {
+		return nil, nil
+	}
+
+	const stmt = ` select id,content,metadata,embedding <=> $1 as distance
+			from documents 
+			order by embedding <=> $1
+			limit 2
+	`
+	rows, err := s.pool.Query(ctx, stmt, pgvector.NewVector(embeddings), topk)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var result []vector.Result
+
+	for rows.Next() {
+		var (
+			r        vector.Result
+			metaRaw  []byte
+			distance float64
+		)
+
+		if err := rows.Scan(&r.ID, &r.Content, &metaRaw, &distance); err != nil {
+			return nil, err
+		}
+		if err := unmarshalMetadata(metaRaw, &r.Metadata); err != nil {
+			return nil, fmt.Errorf("metadata for %s: %w", r.ID, err)
+		}
+
+		r.Score = float32(1 - distance)
+		result = append(result, r)
+	}
+
+	return result, rows.Err()
 }
